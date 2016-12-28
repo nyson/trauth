@@ -3,9 +3,10 @@ module Trauth.REPL where
 
 import System.Console.Readline
 import Control.Monad (when)
-
+import Data.IORef
 import Trauth.TrelloM
 import Trauth.TrelloRequests
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 enterToken = readline "Token: " >>= \case
   Just str -> return str
@@ -42,19 +43,32 @@ readToken action = liftIO (readline "Enter token: ") >>= \case
         action
     Nothing    -> liftIO $ putStrLn "I didn't understand that!"
 
-
 executeCommand :: String -> Trello Bool
-executeCommand = \case
-  url@('/':_) -> do
-    createURLAndMakeRequest url >>= \case
+executeCommand cmd = do
+  continue <- liftIO $ newIORef True
+
+  case cmd of
+    url@('/':_) -> createURLAndMakeRequest url >>= \case
       Left err       -> tPutLn err
-      Right response -> tPutLn "OK!"
-    return True
-  (':':c) | c `elem` ["quit", "q"] -> do
-              liftIO $ putStrLn "Bye!"
-              return False
-  (':':c) | c `elem` ["help", "h"] -> help >> return True
+      Right response -> tPutLn $ LBS.unpack response
+    (':':c) -> control continue c
+    c -> unrecognized c
+  liftIO $ readIORef continue
+
   where tPutLn = liftIO . putStrLn
+
+control :: IORef Bool -> String -> Trello ()
+control cont = \case
+  c | c `elem` ["help", "h"] -> help
+  c | c `elem` ["quit", "q"] -> liftIO $ do
+        putStrLn "Bye!"
+        cont `writeIORef` False
+  c -> unrecognized c
+
+unrecognized c = do
+  liftIO . putStrLn $ mconcat [
+      "Unrecognized command '", c, "'!"]
+  help
 
 help = liftIO . putStrLn $ mconcat [
   "Commands:",

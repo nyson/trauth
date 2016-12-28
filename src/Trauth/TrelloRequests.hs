@@ -4,7 +4,7 @@ module Trauth.TrelloRequests where
 import Network.HTTP.Simple
 
 import Trauth.TrelloM
-import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 {- for auth and secrets, implement stuff that works with https://developers.trello.com/authorize -}
 
@@ -23,7 +23,7 @@ responseData r = unlines $ map mconcat [
   where header :: String -> String
         header s = concat ["======================== ", s, " ========================"]
 
-createURLAndMakeRequest :: String -> Trello (Either String (Response LBS.ByteString))
+createURLAndMakeRequest :: String -> Trello (Either String LBS.ByteString)
 createURLAndMakeRequest requestString = do
   key <- trelloKey
   trelloToken >>= \case
@@ -32,16 +32,16 @@ createURLAndMakeRequest requestString = do
       Left <$> return "Bad token"
     Just t -> do
       let url = concat ["https://api.trello.com/1/",
-                                requestString,
-                                "?key=", key,
-                                "?token=", t
+                                requestString
+                                -- "?key=", key,
+                                -- "?token=", t
                                ]
       liftIO $ do
         putStrLn $ concat ["Executing url ", url, " now..."]
         req <- parseRequest url
         response <- httpLBS req
         case getResponseStatusCode response of
-          200  -> return $ Right response
+          200  -> return $ Right (getResponseBody response)
           code -> return . Left $ mconcat ["Bad HTTP status code ", show code, "!"]
 
 tokenURL :: Trello String
