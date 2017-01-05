@@ -3,6 +3,8 @@ module Trauth.TrelloRequests where
 
 import Network.HTTP.Simple
 
+import Data.Maybe (fromMaybe)
+import Data.List (intercalate)
 import Trauth.TrelloM
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
@@ -25,24 +27,36 @@ responseData r = unlines $ map mconcat [
 
 createURLAndMakeRequest :: String -> Trello (Either String LBS.ByteString)
 createURLAndMakeRequest requestString = do
-  key <- trelloKey
-  trelloToken >>= \case
-    Nothing -> do
-      liftIO $ putStrLn "Bad token found!"
-      Left <$> return "Bad token"
-    Just t -> do
-      let url = concat ["https://api.trello.com/1/",
-                                requestString
-                                -- "?key=", key,
-                                -- "?token=", t
-                               ]
-      liftIO $ do
-        putStrLn $ concat ["Executing url ", url, " now..."]
-        req <- parseRequest url
-        response <- httpLBS req
-        case getResponseStatusCode response of
-          200  -> return $ Right (getResponseBody response)
-          code -> return . Left $ mconcat ["Bad HTTP status code ", show code, "!"]
+  valid <- validToken
+  if valid
+  then do
+    url <- buildUrl requestString
+    liftIO $ do
+      putStrLn $ concat ["Executing url ", url, " now..."]
+      req <- parseRequest url
+      response <- httpLBS req
+      case getResponseStatusCode response of
+        200  -> return $ Right (getResponseBody response)
+        code -> return . Left $ mconcat [
+          "Bad HTTP status code ", show code,
+          "!\nBody: ", show $ getResponseBody response
+          ]
+  else return $ Left "Bad token!"
+
+buildUrl :: String -> Trello String
+buildUrl request = do
+  [k, t] <- mapM (<$> get) [appKey, token]
+  return $ concat [
+    "https://api.trello.com/1/",
+    request,
+    urlArgs . fromMaybe [] $ sequence [
+        ("key=" ++) <$> k,
+        ("token=" ++) <$> t
+        ]
+    ]
+
+    where urlArgs [] = ""
+          urlArgs (h:xs) = concat ["?", h, intercalate "&" xs]
 
 tokenURL :: Trello String
 tokenURL = readTokenURL <$> trelloKey

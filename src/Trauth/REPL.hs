@@ -6,6 +6,7 @@ import Control.Monad (when)
 import Data.IORef
 import Trauth.TrelloM
 import Trauth.TrelloRequests
+import Data.Maybe (isJust)
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 enterToken = readline "Token: " >>= \case
@@ -34,14 +35,12 @@ program = do
   repl
 
 
-readToken action = liftIO (readline "Enter token: ") >>= \case
-    Just token -> setToken token >>= \case
-      Left err  -> liftIO . putStrLn $ mconcat [
-        "Bad token: '", token, "'"]
-      Right ()  -> do
-        liftIO $ putStrLn "Token set, continuing..."
-        action
+readToken :: Trello ()
+readToken = liftIO (readline "Enter token: ") >>= \case
     Nothing    -> liftIO $ putStrLn "I didn't understand that!"
+    Just token -> setToken token >>= \case
+      Left err  -> liftIO . putStrLn $ mconcat ["Bad token: '", token, "'"]
+      Right ()  -> liftIO $ putStrLn "Token set, continuing..."
 
 executeCommand :: String -> Trello Bool
 executeCommand cmd = do
@@ -63,6 +62,7 @@ control cont = \case
   c | c `elem` ["quit", "q"] -> liftIO $ do
         putStrLn "Bye!"
         cont `writeIORef` False
+  c | c `elem` ["token", "t"] -> readToken
   c -> unrecognized c
 
 unrecognized c = do
@@ -80,17 +80,16 @@ help = liftIO . putStrLn $ mconcat [
   ]
 
 repl :: Trello ()
-repl = trelloToken >>= \case
-  Nothing -> readToken repl
-  Just t -> do
-    line <- liftIO $ readline "Trello> "
-    continue <- case strip <$> line of
-      Just str -> do
-        liftIO $ addHistory str
-        executeCommand str
-      _ -> do
-        liftIO $ putStrLn "I didn't recognize that command!"
-        help
-        return True
-
-    when continue repl
+repl = do
+  isJust <$> trelloToken >>= flip when
+    (liftIO $ putStrLn "No token found! You can assign one by writing :token")
+  line <- liftIO $ readline "Trello> "
+  continue <- case strip <$> line of
+    Just str -> do
+      liftIO $ addHistory str
+      executeCommand str
+    _ -> do
+      liftIO $ putStrLn "I didn't recognize that command!"
+      help
+      return True
+  when continue repl

@@ -8,31 +8,41 @@ module Trauth.TrelloM (
   runTrello,
   trelloKey,
   trelloToken,
+  validToken,
   setToken,
-  liftIO
+  liftIO,
+  get
   )where
 
 import Control.Monad.Trans.State
 import Control.Monad.IO.Class(liftIO)
 import Network.HTTP.Simple(parseRequest, getResponseStatusCode, httpNoBody)
-
+import Data.Default
+import Data.Maybe (fromMaybe)
+import Data.Either (isRight)
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 type TKey = String
 type TToken = String
 data TrelloMode = Read
                 | ReadWrite
+                  deriving Show
 
 type Trello = StateT TrelloState IO
 
-data TrelloState = TS {appKey :: TKey,
+data TrelloState = TS {appKey :: Maybe TKey,
                        token  :: Maybe TToken,
                        mode   :: TrelloMode}
+                   deriving Show
 
-runTrello :: TrelloMode -> TKey -> Trello () -> IO ()
-runTrello _ key action = evalStateT action $ TS key Nothing Read
+instance Default TrelloState where
+  def = TS Nothing Nothing Read
+
+runTrello :: TrelloState -> Trello () -> IO ()
+runTrello state action = evalStateT action state
 
 trelloKey :: Trello TKey
-trelloKey = appKey <$> get
+trelloKey = fromMaybe "" . appKey <$> get
 
 trelloToken :: Trello (Maybe TToken)
 trelloToken = token <$> get >>= \case
@@ -48,14 +58,19 @@ setToken t = validateToken t >>= \case
     modify $ \st -> st {token= Just t}
     return $ Right ()
 
+validToken :: Trello Bool
+validToken = do
+  token <$> get >>= \case
+    Nothing -> return False
+    Just t -> isRight <$> validateToken t
+
 validateToken :: TToken -> Trello (Either String ())
 validateToken token = appKey <$> get >>= \key -> liftIO $ do
   req <- parseRequest $ mconcat [
     "https://api.trello.com/1/tokens/", token,
-    "?key=", key
+    "?key=", fromMaybe "" key
     ]
   response <- httpNoBody req
   case getResponseStatusCode response of
     200  -> return $ Right ()
     code -> return . Left $ mconcat ["Bad HTTP status code ", show code, "!"]
-
