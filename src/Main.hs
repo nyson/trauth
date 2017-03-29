@@ -6,6 +6,7 @@ import System.Environment
 
 import Trauth.TrelloM
 import Trauth.REPL
+import Trauth.Authenticate
 import Trauth.TrelloRequests
 import Data.Default (def)
 
@@ -32,5 +33,5 @@ parseArgs c xs = case parseArgList xs of
           (o:next) | o == "-r" -> Right (c {mode = Read}, next)
                    | o == "-rw" -> Right (c {mode = ReadWrite}, next)
 
-          c -> Left $ concat ["Unrecognized command: '", concat c, "'!"]
+          command -> Left $ concat ["Unrecognized command: '", concat command, "'!"]
 

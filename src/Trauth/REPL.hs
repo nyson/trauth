@@ -15,7 +15,6 @@ enterToken = readline "Token: " >>= \case
     putStrLn "You have to enter something!"
     enterToken
 
-
 strip :: String -> String
 strip "" = ""
 strip (' ':str) = strip str
