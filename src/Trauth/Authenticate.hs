@@ -9,6 +9,14 @@ import Network.HTTP.Conduit
 import Data.Aeson
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.IO as TextIO
+import qualified Text.Regex as TRegex
+import Data.Monoid ((<>))
+
+import qualified Trauth.Utils.TokenCache as Cache
+
+data Cache = Cache {cacheToken :: Text}
+  deriving(Read, Show)
 
 data Card = Card {
   id :: Text,
@@ -30,11 +38,36 @@ instance FromJSON Card where
     <*> o .: "name"
     <*> o .: "shortUrl"
 
+class ConsolePrettyPrint a where
+  cpp :: a -> Int -> Text
+
+instance ConsolePrettyPrint Card where
+  cpp card w  = mconcat [
+    header,
+    description,
+
+    body,
+    "\\", T.replicate (w-2) "_", "/"
+    ]
+    where
+      d = desc card
+      description = mconcat ["| ", T.take (w-4) d, T.replicate (w-4-tlength' d) " ", " |\n"]
+      header = mconcat ["/", T.replicate (w-2) "̅ ", "\\\n"]
+      body = mconcat $ map field [
+        mconcat ["Closed? ", if closed card then "Yes" else "No"]
+        ]
+      field t | T.length t > (w-4) = field $ T.take (w-7) t <> "..."
+              | otherwise = mconcat ["| ", t, T.replicate (w-4-tlength' t) " "," |\n"]
+
+      tlength' str = let rx = TRegex.mkRegex "\\e\\[[0-9]+m"
+                         input = T.unpack str
+                     in length $ TRegex.subRegex rx input  ""
+
 oauthSettings = newOAuth {
   oauthRequestUri=     "https://trello.com/1/OAuthGetRequestToken",
   oauthAuthorizeUri=   "https://trello.com/1/OAuthAuthorizeToken",
   oauthAccessTokenUri= "https://trello.com/1/OAuthGetAccessToken",
-  oauthConsumerKey=    "11ed61ffbdc815615494cd41b93b5350",
+  oauthConsumerKey=    Secrets.apiKey,
   oauthConsumerSecret= Secrets.secret,
   oauthVersion=        OAuth10a
   }
@@ -46,6 +79,12 @@ withOAuth httpManager tokenizedCred req = do
 
 withOAuth' :: FromJSON a => Manager -> Credential -> Request -> IO (Maybe a)
 withOAuth' m c r = withOAuth m c r >>= return . decode . responseBody
+
+printExample :: IO ()
+printExample = do
+  raw <- LBS.readFile "examples/card.json"
+  let Just card = (decode :: LBS.ByteString -> Maybe Card) raw
+  TextIO.putStrLn $ cpp card 80
 
 flowExample :: IO ()
 flowExample = do
@@ -84,6 +123,7 @@ flowExample = do
   putStrLn "Let's try to get a card object"
   Just card <- parseRequest "https://api.trello.com/1/cards/G0qATeAL/" >>= withOAuth' man tok
   print (card :: Card)
+  TextIO.putStrLn $ cpp card 80
   ok
 
   putStrLn "Bye!"

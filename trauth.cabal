@@ -53,15 +53,14 @@ executable trauth
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
   
-  -- Modules included in this executable, other than Main.
-  other-modules:       Trauth.TrelloM, Trauth.TrelloRequests, Trauth.REPL
   
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    LambdaCase
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.9 && <5.0, http-conduit > 2.2, bytestring, transformers,
-                       readline, data-default, authenticate-oauth, aeson, text
+                       readline, data-default, authenticate-oauth, aeson, text,
+                       filepath, directory, regex-compat
   
   -- Directories containing source files.
   hs-source-dirs:      src
