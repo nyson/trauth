@@ -1,0 +1,52 @@
+{
+    "id": "57d8f7a7f157899203477bba",
+    "badges": {
+        "votes": 0,
+        "viewingMemberVoted": false,
+        "subscribed": false,
+        "fogbugz": "",
+        "checkItems": 0,
+        "checkItemsChecked": 0,
+        "comments": 0,
+        "attachments": 0,
+        "description": true,
+        "due": null,
+        "dueComplete": false
+    },
+    "checkItemStates": [],
+    "closed": false,
+    "dateLastActivity": "2017-03-30T07:14:06.863Z",
+    "desc": "Harry är ett troll",
+    "descData": {
+        "emoji": {
+        }
+    },
+    "due": null,
+    "dueComplete": false,
+    "email": null,
+    "idBoard": "57d7a3cf1d41ec5f8a3bb64f",
+    "idChecklists": [
+        "58dcafdc1892761dd3a8b8cb"
+    ],
+    "idLabels": [
+        "57d7a3cf84e677fd365a481c"
+    ],
+    "idList": "57d7a86919f01b5531c95f73",
+    "idMembers": [],
+    "idShort": 18,
+    "idAttachmentCover": null,
+    "manualCoverAttachment": false,
+    "labels": [
+        {
+            "id": "57d7a3cf84e677fd365a481c",
+            "idBoard": "57d7a3cf1d41ec5f8a3bb64f",
+            "name": "Research Day",
+            "color": "sky",
+            "uses": 2
+        }
+    ],
+    "name": "RD: Trello from cli",
+    "pos": 327679,
+    "shortUrl": "https://trello.com/c/G0qATeAL",
+    "url": "https://trello.com/c/G0qATeAL/18-rd-trello-from-cli"
+}
