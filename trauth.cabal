@@ -60,7 +60,7 @@ executable trauth
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.9 && <5.0, http-conduit > 2.2, bytestring, transformers,
                        readline, data-default, authenticate-oauth, aeson, text,
-                       filepath, directory, regex-compat
+                       filepath, directory, regex-compat, mtl, split
   
   -- Directories containing source files.
   hs-source-dirs:      src
