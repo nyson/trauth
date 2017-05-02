@@ -4,7 +4,7 @@ module Trauth.Authenticate where
 import Debug.Todo
 
 import Control.Monad.State
-import Control.Exception (catch, Exception)
+import Control.Exception (catch)
 
 import qualified Data.Text.IO as TextIO
 import qualified Data.ByteString as BS
