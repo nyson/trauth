@@ -1,77 +1,49 @@
 {-# LANGUAGE OverloadedStrings, LambdaCase #-}
 module Trauth.Authenticate where
 
+import Debug.Todo
+
 import Control.Monad.State
+import Control.Exception (catch, Exception)
+
+import qualified Data.Text.IO as TextIO
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Trauth.Authenticate.Secrets as Secrets
+
+import Data.Aeson
 import Web.Authenticate.OAuth
 import Network.HTTP.Conduit
-import Data.Aeson
-import Data.Aeson.Types (typeMismatch)
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as TextIO
-import qualified Text.Regex as TRegex
-import Data.Monoid ((<>))
+import qualified Network.HTTP.Types.Status as Status
 
 import Trauth.Utils.URL
 import Trauth.Authenticate.TokenCache
+import Trauth.TrelloObjects.Card
+import Trauth.Utils.ConsolePrettyPrint
 
 getToken :: Credential -> String
 getToken = BS8.unpack . snd . head . unCredential
 
-data Card = Card {
-  id :: Text,
-  closed :: Bool,
-  desc :: Text,
-  board :: Text,
-  labels :: [Text],
-  name :: Text,
-  url :: Text
-  } deriving Show
+newtype Verification = Verification {unV :: (URL, Credential)}
 
-instance FromJSON Card where
-  parseJSON (Object o) = Card
-    <$> o .: "id"
-    <*> o .: "closed"
-    <*> o .: "desc"
-    <*> o .: "idBoard"
-    <*> o .: "idLabels"
-    <*> o .: "name"
-    <*> o .: "shortUrl"
-  parseJSON e = typeMismatch "Card" e
+veriCred :: Verification -> Credential
+veriCred = snd . unV
 
-class ConsolePrettyPrint a where
-  cpp :: a -> Int -> Text
+veriUrl :: Verification -> String
+veriUrl = build . fst . unV
 
-instance ConsolePrettyPrint Card where
-  cpp card w  = mconcat [
-    header,
-    description,
-
-    body,
-    "\\", T.replicate (w-2) "_", "/"
-    ]
-    where
-      d = desc card
-      description = mconcat ["| ", T.take (w-4) d, T.replicate (w-4-tlength' d) " ", " |\n"]
-      header = mconcat ["/", T.replicate (w-2) "̅ ", "\\\n"]
-      body = mconcat $ map field [
-        mconcat ["Closed? ", if closed card then "Yes" else "No"]
-        ]
-      field t | T.length t > (w-4) = field $ T.take (w-7) t <> "..."
-              | otherwise = mconcat ["| ", t, T.replicate (w-4-tlength' t) " "," |\n"]
-
-      tlength' str = let rx = TRegex.mkRegex "\\e\\[[0-9]+m"
-                         input = T.unpack str
-                     in length $ TRegex.subRegex rx input  ""
+veri :: String -> Credential -> Verification
+veri s c = case parse s of
+  Right url -> Verification (url, c)
+  Left  err -> error $ "Bad url parse: " ++ err
 
 type TrelloRequest = StateT (Manager, Credential) IO
 
 runR :: Manager -> OAuth -> TrelloRequest () -> IO ()
 runR man settings req = do
+  todo "use the settings"
+  todo "finish the run function"
   let cred = undefined
   evalStateT req (man, cred)
 
@@ -99,13 +71,43 @@ printExample = do
   let Just card = (decode :: LBS.ByteString -> Maybe Card) raw
   TextIO.putStrLn $ cpp card 80
 
-loadToken :: TrelloRequest (Maybe Credential)
-loadToken = do
-  liftIO (load "token") >>= \case
-    Ok (Cache credential) -> Just <$> do
-      undefined
-    _                     -> return Nothing
-  undefined
+findCredentials :: TrelloRequest (Maybe Credential)
+findCredentials = liftIO (load "token") >>= \case
+  Ok (Cache credential) -> validateCredential credential
+  _ -> return Nothing
+
+validateCredential :: Credential -> TrelloRequest (Maybe Credential)
+validateCredential cred = do
+  (man, _key) <- get
+  response <- parseRequest ("https://api.trello.com/1/token/" ++ getToken cred ++ "?key=" ++ BS8.unpack Secrets.apiKey)
+              >>= flip httpLbs man
+  return $ if responseStatus response == Status.ok200
+           then Just cred
+           else Nothing
+
+initiateVerification :: TrelloRequest Verification
+initiateVerification = do
+  man <- fst <$> get
+  cred <- liftIO $ getTemporaryCredentialWithScope "read" oauthSettings man
+  initV cred
+  where
+    initV :: Monad m => Credential -> m Verification
+    initV cred = let aUrl = authorizeUrl' (\_ _ -> [("name", "Trauth")]) oauthSettings cred
+                 in return $ veri aUrl cred
+
+tryVerification :: String -> Credential -> TrelloRequest (Maybe Credential)
+tryVerification verification cred
+  = fst <$> get >>= try . getAccessToken oauthSettings cred'
+  where
+    try action = liftIO $ (Just <$> action) `catch` handler
+    handler = const (return Nothing) :: OAuthException -> IO (Maybe a)
+    cred' = flip injectVerifier cred $ BS8.pack verification
+
+realFlow :: TrelloRequest (Either Verification Credential)
+realFlow = findCredentials >>= \case
+    Just cred -> return $ Right cred
+    Nothing   -> Left <$> initiateVerification
+
 
 flowExample :: IO (Manager, Credential)
 flowExample = do

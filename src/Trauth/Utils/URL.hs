@@ -27,8 +27,7 @@ build url = concat [protocol url, "://",
                    ]
 
 parse :: String -> Either String URL
-parse raw = fst <$> do
-  parseProtocol (url, raw) >>= parseUserAndPassword >>= parsePathAndArgs
+parse raw = fst <$> (parseProtocol (url, raw) >>= parseUserAndPassword >>= parsePathAndArgs)
   where url = URL {protocol=    "-",
                    domain=      "-",
                    credentials= Nothing,
@@ -60,7 +59,7 @@ parseProtocol (url, str)
   | "http://"  == lowerTake 7 str = Right (url {protocol= "http"}, drop 7 str)
   | "https://" == lowerTake 8 str = Right (url {protocol= "https"}, drop 8 str)
   | otherwise = Left "bad protocol!"
-  where lowerTake i = map (Char.toLower) . take i
+  where lowerTake i = map Char.toLower . take i
 
 parsePathAndArgs :: (URL, String) -> Either String (URL, String)
 parsePathAndArgs (url, str) = do
