@@ -9,6 +9,8 @@ import Trauth.TrelloObjects.Card
 import Trauth.Authenticate
 import qualified Trauth.Utils as U
 
+import Trauth.REPL
+
 app = do
   man <- newManager tlsManagerSettings
   cred <- loadOrCreateCredentials man
