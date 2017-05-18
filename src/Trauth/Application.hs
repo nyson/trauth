@@ -11,6 +11,7 @@ import qualified Trauth.Utils as U
 
 import Trauth.REPL
 
+app :: IO ()
 app = do
   man <- newManager tlsManagerSettings
   cred <- loadOrCreateCredentials man
