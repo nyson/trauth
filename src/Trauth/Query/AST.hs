@@ -1,51 +1,76 @@
-{-# LANGUAGE GADTs, LambdaCase #-}
+{-# LANGUAGE LambdaCase #-}
 module Trauth.Query.AST where
 
 import Debug.Todo
 import Data.Char (toLower)
-import Data.List (intercalate)
+import Data.Either (rights)
 import Control.Monad.State
-
-data Object = Card
+import qualified Data.HashMap as Map
+import Data.HashMap (Map)
 
 data Context = Context {arguments :: [String],
                         consumed :: [String]}
 
 type CommandReader = StateT Context (Either String)
 
-newtype Command = Command {getCD :: [(String, CommandDispatcher)]}
+data Command = Runnable Int ([String] -> IO ())
+             | Branch (Map String Command)
 
-data CommandDispatcher = CDCommand   Command
-                       | CDRunnable ([String] -> IO ())
+instance Monoid Command where
+  mempty = Branch Map.empty
+  mappend (Branch cs1) (Branch cs2)
+    = Branch $ Map.union cs1 cs2
+
+  mappend (Runnable a1 f1) (Runnable a2 f2)
+    = let a = max a1 a2
+          f args = f1 (take a1 args) >> f2 (take a2 args)
+      in Runnable a f
+
+mkCom :: String -> Int -> ([String] -> IO ()) -> Command
+mkCom invoker arity f = cc (tokenize invoker)
+  where cc :: [String] -> Command
+        cc = \case (x:xs) -> Branch $ Map.singleton x $ cc xs
+                   []     -> Runnable arity f
+
+exampleCommands
+  = mconcat [mkCom "help"     0 $ \[] -> putStrLn "hello!",
+             mkCom "get card" 1 $ \[x] -> putStrLn $ "fetching card: " ++ x,
+             mkCom "set bard" 2 $ \[x, y] -> putStrLn $ concat [
+                "setting bard '", x, "' to '", y, "'"
+                ]
+            ]
 
 run :: String -> Command -> Either String (IO ())
-run query command = do
-  (f, Context as _cs) <- runStateT (eval command) (Context (tokenize query) [])
-  return $ f as
+run query command = apply <$> runStateT (eval command) ctx
+  where apply (f, Context as _cs) = f as
+        ctx = Context (tokenize query) []
+
 
 eval :: Command -> CommandReader ([String] -> IO ())
-eval c = unlessEmpty $ do
+eval (Runnable arity function) = do
+  fLen <- length . arguments <$> get
+  unless (arity == fLen) $ do
+    consed <- strConsumed
+    fail $ concat ["Wrong number of arguments for '", consed, "'",
+                   "\nExpected ", show arity, ", got ", show fLen]
+  return function
+eval (Branch branch) = unlessEmpty $ do
   arg <- head . arguments <$> get
   modify $ \(Context (a:as) cs) -> Context as (a:cs)
 
-  case getCommandDispatcher c arg of
-    Just (CDCommand c') -> eval c'
-    Just (CDRunnable f) -> return f
+  case Map.lookup arg branch of
+    Just c -> eval c
     Nothing -> do
-      cs <- getConsumed
+      cs <- strConsumed
       fail $ concat ["No such command '", cs, "'"]
 
-    where getConsumed = unwords . reverse . consumed <$> get
-          unlessEmpty m = (arguments <$> get) >>= \case
-            [] -> do cs <- getConsumed
+    where unlessEmpty m = (arguments <$> get) >>= \case
+            [] -> do cs <- strConsumed
                      fail $ concat ["Not enough arguments after '", cs, "'"]
             _  -> m
 
-
-
-
 tokenize :: String -> [String]
-tokenize = reverse . tokenize' [] []
+tokenize = tokenize' [] []
   where tokenize' tokens buf (x:y:xs)
           | all (`elem` ws) [x, y]  = tokenize' tokens buf (y:xs)
         tokenize' tokens buf (x:xs)
@@ -55,14 +80,5 @@ tokenize = reverse . tokenize' [] []
 
         ws = [' ', '\n', '\t']
 
-dispatchers :: Command -> [String]
-dispatchers = map fst . getCD
-
-getCommandDispatcher :: Command -> String -> Maybe CommandDispatcher
-getCommandDispatcher c s = lookup s $ getCD c
-
-
-
-getObjectType :: String -> Either String Object
-getObjectType "card" = Right Card
-getObjectType t = Left $ "Unknown Trello Object '"++ t ++"'"
+strConsumed :: CommandReader String
+strConsumed = unwords . reverse . consumed <$> get
