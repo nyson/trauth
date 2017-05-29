@@ -61,7 +61,7 @@ executable trauth
   build-depends:       base >=4.9 && <5.0, http-conduit > 2.2, bytestring, transformers,
                        readline, data-default, authenticate-oauth, aeson, text,
                        filepath, directory >= 1.3, regex-compat, mtl, http-types, todo, directory,
-                       split
+                       split, hashmap
   
   -- Directories containing source files.
   hs-source-dirs:      src
